@@ -4,7 +4,7 @@ from django.core.validators import MaxLengthValidator
 
 class Ticket(models.Model):
     """
-    Support Ticket Model with database-level constraints
+    Support ticket model with LLM-assisted categorization and prioritization.
     """
     
     # Category choices
@@ -51,12 +51,14 @@ class Ticket(models.Model):
         max_length=200,
         blank=False,
         null=False,
-        db_index=True
+        db_index=True,
+        help_text='Short summary of the issue'
     )
     
     description = models.TextField(
         blank=False,
-        null=False
+        null=False,
+        help_text='Detailed description of the issue'
     )
     
     category = models.CharField(
@@ -64,7 +66,8 @@ class Ticket(models.Model):
         choices=CATEGORY_CHOICES,
         blank=False,
         null=False,
-        db_index=True
+        db_index=True,
+        help_text='Auto-suggested by LLM, can be overridden'
     )
     
     priority = models.CharField(
@@ -72,7 +75,8 @@ class Ticket(models.Model):
         choices=PRIORITY_CHOICES,
         blank=False,
         null=False,
-        db_index=True
+        db_index=True,
+        help_text='Auto-suggested by LLM, can be overridden'
     )
     
     status = models.CharField(
@@ -81,40 +85,36 @@ class Ticket(models.Model):
         default=STATUS_OPEN,
         blank=False,
         null=False,
-        db_index=True
+        db_index=True,
+        help_text='Current status of the ticket'
     )
     
     created_at = models.DateTimeField(
         auto_now_add=True,
-        db_index=True
+        db_index=True,
+        help_text='Timestamp when ticket was created'
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text='Timestamp when ticket was last updated'
     )
     
     class Meta:
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['-created_at']),
-            models.Index(fields=['status', '-created_at']),
-            models.Index(fields=['category', '-created_at']),
-            models.Index(fields=['priority', '-created_at']),
+            models.Index(fields=['category', 'status']),
+            models.Index(fields=['priority', 'status']),
         ]
-        constraints = [
-            models.CheckConstraint(
-                check=models.Q(title__length__lte=200),
-                name='title_max_length_200'
-            ),
-            models.CheckConstraint(
-                check=models.Q(category__in=['billing', 'technical', 'account', 'general']),
-                name='valid_category'
-            ),
-            models.CheckConstraint(
-                check=models.Q(priority__in=['low', 'medium', 'high', 'critical']),
-                name='valid_priority'
-            ),
-            models.CheckConstraint(
-                check=models.Q(status__in=['open', 'in_progress', 'resolved', 'closed']),
-                name='valid_status'
-            ),
-        ]
+        db_table = 'tickets'
+        verbose_name = 'Support Ticket'
+        verbose_name_plural = 'Support Tickets'
     
     def __str__(self):
-        return f"{self.title} - {self.get_priority_display()}"
+        return f"[{self.get_priority_display()}] {self.title}"
+    
+    def save(self, *args, **kwargs):
+        """Ensure constraints are met before saving."""
+        self.full_clean()
+        super().save(*args, **kwargs)

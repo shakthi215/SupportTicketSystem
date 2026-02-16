@@ -1,205 +1,224 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { ticketAPI } from '../services/api';
 
-const TicketForm = ({ onTicketCreated, apiBaseUrl }) => {
+const TicketForm = ({ onTicketCreated }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    category: '',
-    priority: ''
+    category: 'general',
+    priority: 'medium',
   });
-  const [classifying, setClassifying] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [suggestedValues, setSuggestedValues] = useState(null);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  
+  const [isClassifying, setIsClassifying] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const [classificationTimer, setClassificationTimer] = useState(null);
 
-  // Auto-classify when description changes (with debounce)
   useEffect(() => {
-    if (formData.description.length > 20) {
-      const timer = setTimeout(() => {
-        classifyDescription();
-      }, 1000); // Wait 1 second after user stops typing
+    // Cleanup timer on unmount
+    return () => {
+      if (classificationTimer) {
+        clearTimeout(classificationTimer);
+      }
+    };
+  }, [classificationTimer]);
 
-      return () => clearTimeout(timer);
+  const handleDescriptionChange = (e) => {
+    const description = e.target.value;
+    setFormData(prev => ({ ...prev, description }));
+
+    // Clear previous timer
+    if (classificationTimer) {
+      clearTimeout(classificationTimer);
     }
-  }, [formData.description]);
 
-  const classifyDescription = async () => {
-    setClassifying(true);
-    setSuggestedValues(null);
+    // Only classify if description is substantial
+    if (description.trim().length >= 20) {
+      const timer = setTimeout(() => {
+        classifyDescription(description);
+      }, 1000); // Debounce for 1 second
+      
+      setClassificationTimer(timer);
+    }
+  };
+
+  const classifyDescription = async (description) => {
+    if (!description || description.trim().length < 20) return;
+
+    setIsClassifying(true);
+    setError(null);
 
     try {
-      const response = await axios.post(`${apiBaseUrl}/tickets/classify/`, {
-        description: formData.description
-      });
-
-      setSuggestedValues({
-        category: response.data.suggested_category,
-        priority: response.data.suggested_priority
-      });
-
-      // Auto-fill if user hasn't selected values yet
-      if (!formData.category) {
-        setFormData(prev => ({
-          ...prev,
-          category: response.data.suggested_category
-        }));
-      }
-      if (!formData.priority) {
-        setFormData(prev => ({
-          ...prev,
-          priority: response.data.suggested_priority
-        }));
-      }
-    } catch (error) {
-      console.error('Classification error:', error);
-      // Fail silently - user can still select manually
+      const result = await ticketAPI.classifyTicket(description);
+      
+      setFormData(prev => ({
+        ...prev,
+        category: result.suggested_category || 'general',
+        priority: result.suggested_priority || 'medium',
+      }));
+    } catch (err) {
+      console.error('Classification failed:', err);
+      // Fail silently - not critical to ticket submission
     } finally {
-      setClassifying(false);
+      setIsClassifying(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    // Validation
-    if (!formData.title.trim()) {
-      setError('Title is required');
-      return;
-    }
-    if (formData.title.length > 200) {
-      setError('Title must not exceed 200 characters');
-      return;
-    }
-    if (!formData.description.trim()) {
-      setError('Description is required');
-      return;
-    }
-    if (!formData.category) {
-      setError('Please select a category');
-      return;
-    }
-    if (!formData.priority) {
-      setError('Please select a priority');
-      return;
-    }
-
-    setSubmitting(true);
+    setError(null);
+    setSuccess(false);
+    setIsSubmitting(true);
 
     try {
-      await axios.post(`${apiBaseUrl}/tickets/`, formData);
-      setSuccess('Ticket created successfully!');
+      // Validate
+      if (!formData.title.trim()) {
+        throw new Error('Title is required');
+      }
+      if (!formData.description.trim()) {
+        throw new Error('Description is required');
+      }
+      if (formData.title.length > 200) {
+        throw new Error('Title cannot exceed 200 characters');
+      }
+
+      // Create ticket
+      const newTicket = await ticketAPI.createTicket(formData);
       
-      // Reset form
+      // Success!
+      setSuccess(true);
       setFormData({
         title: '',
         description: '',
-        category: '',
-        priority: ''
+        category: 'general',
+        priority: 'medium',
       });
-      setSuggestedValues(null);
 
       // Notify parent
       if (onTicketCreated) {
-        onTicketCreated();
+        onTicketCreated(newTicket);
       }
 
       // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError('Failed to create ticket. Please try again.');
-      console.error('Submission error:', error);
+      setTimeout(() => setSuccess(false), 3000);
+
+    } catch (err) {
+      setError(err.message || 'Failed to create ticket');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className="ticket-form">
-      <form onSubmit={handleSubmit}>
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
+  return (
+    <div className="card">
+      <h2 className="card-title">🎫 Submit a New Ticket</h2>
+
+      {error && (
+        <div className="error-message">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="success-message">
+          ✅ Ticket created successfully!
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label>Title *</label>
+          <label htmlFor="title">
+            Title <span style={{ color: 'red' }}>*</span>
+          </label>
           <input
             type="text"
+            id="title"
+            name="title"
             value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            onChange={handleChange}
             placeholder="Brief summary of your issue"
-            maxLength={200}
+            maxLength="200"
             required
           />
-          <small>{formData.title.length}/200 characters</small>
+          <small style={{ color: '#999', fontSize: '0.85rem' }}>
+            {formData.title.length}/200 characters
+          </small>
         </div>
 
         <div className="form-group">
-          <label>Description *</label>
+          <label htmlFor="description">
+            Description <span style={{ color: 'red' }}>*</span>
+          </label>
           <textarea
+            id="description"
+            name="description"
             value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Provide detailed information about your issue..."
-            rows={5}
+            onChange={handleDescriptionChange}
+            placeholder="Describe your issue in detail..."
             required
           />
-          {classifying && (
-            <small className="classifying">
-              🤖 AI is analyzing your description...
-            </small>
+          {isClassifying && (
+            <div className="classifying-indicator">
+              <span className="classifying-spinner"></span>
+              AI is analyzing your description...
+            </div>
           )}
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label>
-              Category *
-              {suggestedValues && (
-                <span className="suggestion">
-                  {' '}(AI suggested: {suggestedValues.category})
-                </span>
-              )}
+            <label htmlFor="category">
+              Category {isClassifying && '✨'}
             </label>
             <select
+              id="category"
+              name="category"
               value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              required
+              onChange={handleChange}
             >
-              <option value="">Select category...</option>
               <option value="billing">Billing</option>
               <option value="technical">Technical</option>
               <option value="account">Account</option>
               <option value="general">General</option>
             </select>
+            <small style={{ color: '#999', fontSize: '0.85rem' }}>
+              AI-suggested, you can override
+            </small>
           </div>
 
           <div className="form-group">
-            <label>
-              Priority *
-              {suggestedValues && (
-                <span className="suggestion">
-                  {' '}(AI suggested: {suggestedValues.priority})
-                </span>
-              )}
+            <label htmlFor="priority">
+              Priority {isClassifying && '✨'}
             </label>
             <select
+              id="priority"
+              name="priority"
               value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-              required
+              onChange={handleChange}
             >
-              <option value="">Select priority...</option>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
               <option value="critical">Critical</option>
             </select>
+            <small style={{ color: '#999', fontSize: '0.85rem' }}>
+              AI-suggested, you can override
+            </small>
           </div>
         </div>
 
-        <button type="submit" disabled={submitting || classifying}>
-          {submitting ? 'Submitting...' : 'Submit Ticket'}
+        <button 
+          type="submit" 
+          className="btn btn-primary btn-full"
+          disabled={isSubmitting || isClassifying}
+        >
+          {isSubmitting ? 'Creating Ticket...' : 'Submit Ticket'}
         </button>
       </form>
     </div>

@@ -1,129 +1,116 @@
 import React, { useState } from 'react';
 
-const TicketList = ({ tickets, onUpdateStatus }) => {
+const TicketList = ({ tickets, onUpdateTicket, loading }) => {
   const [expandedTicket, setExpandedTicket] = useState(null);
 
-  if (tickets.length === 0) {
-    return (
-      <div className="no-tickets">
-        <p>No tickets found. Try adjusting your filters or create a new ticket.</p>
-      </div>
-    );
-  }
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const truncateText = (text, maxLength = 150) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
+  const handleStatusChange = async (ticketId, newStatus) => {
+    try {
+      await onUpdateTicket(ticketId, { status: newStatus });
+    } catch (err) {
+      alert('Failed to update ticket status');
+    }
+  };
 
   const toggleExpand = (ticketId) => {
     setExpandedTicket(expandedTicket === ticketId ? null : ticketId);
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
+  if (loading) {
+    return (
+      <div className="loading">
+        <div className="loading-spinner"></div>
+        <p style={{ marginTop: '20px' }}>Loading tickets...</p>
+      </div>
+    );
+  }
 
-  const getCategoryBadge = (category) => {
-    const colors = {
-      billing: '#10b981',
-      technical: '#3b82f6',
-      account: '#f59e0b',
-      general: '#6b7280'
-    };
-    return colors[category] || '#6b7280';
-  };
-
-  const getPriorityBadge = (priority) => {
-    const colors = {
-      low: '#10b981',
-      medium: '#f59e0b',
-      high: '#ef4444',
-      critical: '#7c2d12'
-    };
-    return colors[priority] || '#6b7280';
-  };
-
-  const getStatusBadge = (status) => {
-    const colors = {
-      open: '#3b82f6',
-      in_progress: '#f59e0b',
-      resolved: '#10b981',
-      closed: '#6b7280'
-    };
-    return colors[status] || '#6b7280';
-  };
-
-  const handleStatusChange = (ticketId, newStatus) => {
-    if (onUpdateStatus) {
-      onUpdateStatus(ticketId, newStatus);
-    }
-  };
+  if (tickets.length === 0) {
+    return (
+      <div className="empty-state">
+        <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📭</div>
+        <h3>No tickets found</h3>
+        <p>Try adjusting your filters or create a new ticket</p>
+      </div>
+    );
+  }
 
   return (
     <div className="ticket-list">
-      {tickets.map((ticket) => (
-        <div key={ticket.id} className="ticket-card">
-          <div className="ticket-header" onClick={() => toggleExpand(ticket.id)}>
-            <div className="ticket-title-section">
-              <h3>{ticket.title}</h3>
-              <span className="ticket-id">#{ticket.id}</span>
+      {tickets.map((ticket) => {
+        const isExpanded = expandedTicket === ticket.id;
+        
+        return (
+          <div 
+            key={ticket.id} 
+            className="ticket-item"
+            onClick={() => toggleExpand(ticket.id)}
+          >
+            <div className="ticket-header">
+              <h3 className="ticket-title">
+                #{ticket.id} - {ticket.title}
+              </h3>
+              <div className="ticket-badges">
+                <span className={`badge badge-category-${ticket.category}`}>
+                  {ticket.category}
+                </span>
+                <span className={`badge badge-priority-${ticket.priority}`}>
+                  {ticket.priority}
+                </span>
+                <span className={`badge badge-status-${ticket.status}`}>
+                  {ticket.status.replace('_', ' ')}
+                </span>
+              </div>
             </div>
-            <div className="ticket-badges">
-              <span
-                className="badge"
-                style={{ backgroundColor: getCategoryBadge(ticket.category) }}
-              >
-                {ticket.category}
-              </span>
-              <span
-                className="badge"
-                style={{ backgroundColor: getPriorityBadge(ticket.priority) }}
-              >
-                {ticket.priority}
-              </span>
-              <span
-                className="badge"
-                style={{ backgroundColor: getStatusBadge(ticket.status) }}
-              >
-                {ticket.status.replace('_', ' ')}
-              </span>
+
+            <p className="ticket-description">
+              {isExpanded ? ticket.description : truncateText(ticket.description)}
+            </p>
+
+            <div className="ticket-meta">
+              <span>Created: {formatDate(ticket.created_at)}</span>
+              {ticket.updated_at !== ticket.created_at && (
+                <span>Updated: {formatDate(ticket.updated_at)}</span>
+              )}
             </div>
+
+            {isExpanded && (
+              <div 
+                className="ticket-actions"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <label>
+                  <strong>Update Status:</strong>
+                  <select
+                    value={ticket.status}
+                    onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                  >
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </label>
+              </div>
+            )}
           </div>
-
-          {expandedTicket === ticket.id && (
-            <div className="ticket-details">
-              <div className="ticket-description">
-                <strong>Description:</strong>
-                <p>{ticket.description}</p>
-              </div>
-              
-              <div className="ticket-meta">
-                <p><strong>Created:</strong> {formatDate(ticket.created_at)}</p>
-              </div>
-
-              <div className="ticket-actions">
-                <label><strong>Update Status:</strong></label>
-                <select
-                  value={ticket.status}
-                  onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
-                  className="status-select"
-                >
-                  <option value="open">Open</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          <div className="ticket-footer">
-            <button
-              className="expand-button"
-              onClick={() => toggleExpand(ticket.id)}
-            >
-              {expandedTicket === ticket.id ? '▲ Collapse' : '▼ Expand Details'}
-            </button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

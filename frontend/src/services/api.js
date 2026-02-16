@@ -1,40 +1,73 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// Configure axios instance
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,
 });
 
-export const ticketService = {
-  getTickets: (filters = {}) => {
+// Request interceptor for logging
+api.interceptors.request.use(
+  (config) => {
+    console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
+// Ticket API functions
+export const ticketAPI = {
+  // Get all tickets with optional filters
+  getTickets: async (filters = {}) => {
     const params = new URLSearchParams();
+    
     if (filters.category) params.append('category', filters.category);
     if (filters.priority) params.append('priority', filters.priority);
     if (filters.status) params.append('status', filters.status);
     if (filters.search) params.append('search', filters.search);
     
-    const queryString = params.toString();
-    return api.get(`/tickets/${queryString ? '?' + queryString : ''}`);
+    const response = await api.get(`/tickets/?${params.toString()}`);
+    return response.data;
   },
 
-  createTicket: (ticketData) => {
-    return api.post('/tickets/', ticketData);
+  // Create a new ticket
+  createTicket: async (ticketData) => {
+    const response = await api.post('/tickets/', ticketData);
+    return response.data;
   },
 
-  updateTicket: (id, updates) => {
-    return api.patch(`/tickets/${id}/`, updates);
+  // Update ticket (PATCH)
+  updateTicket: async (id, updates) => {
+    const response = await api.patch(`/tickets/${id}/`, updates);
+    return response.data;
   },
 
-  getStats: () => {
-    return api.get('/tickets/stats/');
+  // Get ticket statistics
+  getStats: async () => {
+    const response = await api.get('/tickets/stats/');
+    return response.data;
   },
 
-  classifyTicket: (description) => {
-    return api.post('/tickets/classify/', { description });
+  // Classify ticket description using LLM
+  classifyTicket: async (description) => {
+    const response = await api.post('/tickets/classify/', { description });
+    return response.data;
   },
 };
 

@@ -1,1 +1,1 @@
-# Tickets Django App
+default_app_config = 'tickets.apps.TicketsConfig'

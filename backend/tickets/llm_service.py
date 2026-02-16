@@ -1,184 +1,177 @@
-import os
-import json
-from anthropic import Anthropic
+"""
+LLM Service for intelligent ticket classification and prioritization.
+
+This module handles integration with LLM APIs (Anthropic Claude) to automatically
+suggest categories and priorities for support tickets based on their descriptions.
+"""
+
+import logging
+from typing import Dict, Optional
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClassifier:
     """
-    Service for classifying support tickets using Anthropic's Claude API.
+    Intelligent ticket classifier using Claude API.
     
-    This service analyzes ticket descriptions and suggests appropriate
-    category and priority levels based on content analysis.
+    The classifier analyzes ticket descriptions to suggest:
+    - Category: billing, technical, account, or general
+    - Priority: low, medium, high, or critical
     """
     
+    CLASSIFICATION_PROMPT = """You are an expert support ticket classifier. Analyze the following support ticket description and classify it into the appropriate category and priority level.
+
+Ticket Description:
+{description}
+
+Categories:
+- billing: Issues related to payments, invoices, subscriptions, refunds, pricing
+- technical: Technical problems, bugs, errors, software issues, integration problems
+- account: Account access, login issues, password resets, account settings, profile updates
+- general: Questions, feature requests, feedback, or anything that doesn't fit the above
+
+Priority Levels:
+- critical: System down, security breach, data loss, complete service outage, revenue impact
+- high: Major functionality broken, significant business impact, many users affected
+- medium: Important but not urgent, moderate impact, workarounds available
+- low: Minor issues, cosmetic problems, feature requests, general questions
+
+Respond with ONLY a JSON object in this exact format (no markdown, no explanation):
+{{"category": "one_of_the_categories", "priority": "one_of_the_priorities"}}
+
+Examples:
+Description: "I can't log into my account, tried resetting password but didn't receive email"
+Response: {{"category": "account", "priority": "high"}}
+
+Description: "The dashboard is loading very slowly, takes 30+ seconds"
+Response: {{"category": "technical", "priority": "medium"}}
+
+Description: "I was charged twice for my subscription this month"
+Response: {{"category": "billing", "priority": "high"}}
+
+Description: "How do I export my data?"
+Response: {{"category": "general", "priority": "low"}}
+
+Now classify this ticket:
+"""
+
     def __init__(self):
-        self.api_key = settings.ANTHROPIC_API_KEY
-        self.client = None
-        if self.api_key:
-            try:
-                self.client = Anthropic(api_key=self.api_key)
-            except Exception as e:
-                print(f"Failed to initialize Anthropic client: {e}")
+        self.api_key = settings.LLM_API_KEY
+        self.provider = settings.LLM_PROVIDER
+        self.is_configured = bool(self.api_key)
+        
+        if not self.is_configured:
+            logger.warning("LLM API key not configured. Classification will return defaults.")
     
-    def classify_ticket(self, description):
+    def classify_ticket(self, description: str) -> Dict[str, str]:
         """
-        Classify a ticket description and return suggested category and priority.
+        Classify a ticket description into category and priority.
         
         Args:
-            description (str): The ticket description text
+            description: The ticket description text
             
         Returns:
-            dict: Dictionary with 'suggested_category' and 'suggested_priority'
-                  Returns default values if classification fails
+            Dictionary with 'suggested_category' and 'suggested_priority'
+            Falls back to defaults if LLM is unavailable or fails
         """
-        # Default fallback values
-        default_response = {
-            'suggested_category': 'general',
-            'suggested_priority': 'medium'
-        }
+        if not self.is_configured:
+            logger.info("LLM not configured, using default classification")
+            return self._get_default_classification()
         
-        # Check if API key is configured
-        if not self.client:
-            print("Anthropic API key not configured, using defaults")
-            return default_response
-        
-        # Check if description is valid
-        if not description or not description.strip():
-            return default_response
+        if not description or len(description.strip()) < 10:
+            logger.info("Description too short for classification, using defaults")
+            return self._get_default_classification()
         
         try:
-            # Craft a detailed prompt for Claude
-            prompt = self._build_classification_prompt(description)
+            if self.provider == 'anthropic':
+                return self._classify_with_anthropic(description)
+            else:
+                logger.warning(f"Unknown LLM provider: {self.provider}")
+                return self._get_default_classification()
+                
+        except Exception as e:
+            logger.error(f"LLM classification failed: {str(e)}", exc_info=True)
+            return self._get_default_classification()
+    
+    def _classify_with_anthropic(self, description: str) -> Dict[str, str]:
+        """
+        Use Anthropic Claude API for classification.
+        """
+        try:
+            import anthropic
+        except ImportError:
+            logger.error("anthropic package not installed")
+            return self._get_default_classification()
+        
+        try:
+            client = anthropic.Anthropic(api_key=self.api_key)
             
-            # Call Claude API
-            message = self.client.messages.create(
+            prompt = self.CLASSIFICATION_PROMPT.format(description=description)
+            
+            message = client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=150,
-                temperature=0.3,
+                max_tokens=200,
+                temperature=0.0,  # Deterministic for classification
                 messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "user", "content": prompt}
                 ]
             )
             
-            # Extract and parse response
             response_text = message.content[0].text.strip()
-            result = self._parse_classification_response(response_text)
+            logger.info(f"LLM raw response: {response_text}")
             
-            return result
+            # Parse JSON response
+            import json
+            result = json.loads(response_text)
             
-        except Exception as e:
-            print(f"LLM classification error: {e}")
-            return default_response
-    
-    def _build_classification_prompt(self, description):
-        """
-        Build a comprehensive prompt for ticket classification.
-        
-        This prompt is designed to:
-        1. Understand the ticket context
-        2. Identify key indicators for category and priority
-        3. Return structured, parseable output
-        """
-        prompt = f"""You are an expert support ticket classifier for a technical support system.
-
-Analyze the following support ticket description and classify it into the appropriate category and priority level.
-
-TICKET DESCRIPTION:
-{description}
-
-CLASSIFICATION RULES:
-
-Categories (choose exactly one):
-- billing: Payment issues, invoices, refunds, subscription problems, pricing questions
-- technical: Bugs, errors, system failures, integration issues, performance problems
-- account: Login issues, password resets, profile updates, permissions, access problems
-- general: Questions, feature requests, general inquiries, documentation, how-to questions
-
-Priority Levels (choose exactly one):
-- critical: System down, data loss, security breach, complete service unavailable, urgent business impact
-- high: Major functionality broken, significant user impact, workaround difficult/impossible
-- medium: Feature not working as expected, moderate impact, workaround available
-- low: Minor issues, cosmetic problems, general questions, feature requests
-
-ANALYSIS GUIDELINES:
-1. Look for urgency indicators: "urgent", "asap", "immediately", "down", "broken", "not working"
-2. Assess business impact: revenue loss, customer-facing issues, data integrity
-3. Consider user frustration level and tone
-4. Default to medium priority if unclear
-
-OUTPUT FORMAT:
-Respond with ONLY a JSON object in this exact format (no additional text):
-{{"category": "category_name", "priority": "priority_level"}}
-
-Examples:
-- "Can't login to my account" → {{"category": "account", "priority": "medium"}}
-- "Payment failed, urgent!" → {{"category": "billing", "priority": "high"}}
-- "System completely down" → {{"category": "technical", "priority": "critical"}}
-- "How do I export data?" → {{"category": "general", "priority": "low"}}
-
-Now classify the ticket above:"""
-        
-        return prompt
-    
-    def _parse_classification_response(self, response_text):
-        """
-        Parse the LLM response and extract category and priority.
-        
-        Args:
-            response_text (str): Raw text response from Claude
+            # Validate and return
+            category = result.get('category', 'general')
+            priority = result.get('priority', 'medium')
             
-        Returns:
-            dict: Parsed category and priority
-        """
-        try:
-            # Try to parse as JSON first
-            data = json.loads(response_text)
-            
-            category = data.get('category', 'general').lower()
-            priority = data.get('priority', 'medium').lower()
-            
-            # Validate category
+            # Validate categories and priorities
             valid_categories = ['billing', 'technical', 'account', 'general']
+            valid_priorities = ['low', 'medium', 'high', 'critical']
+            
             if category not in valid_categories:
+                logger.warning(f"Invalid category from LLM: {category}, using 'general'")
                 category = 'general'
             
-            # Validate priority
-            valid_priorities = ['low', 'medium', 'high', 'critical']
             if priority not in valid_priorities:
+                logger.warning(f"Invalid priority from LLM: {priority}, using 'medium'")
                 priority = 'medium'
             
-            return {
-                'suggested_category': category,
-                'suggested_priority': priority
-            }
-            
-        except json.JSONDecodeError:
-            # Fallback: try to extract from text
-            response_lower = response_text.lower()
-            
-            # Extract category
-            category = 'general'
-            for cat in ['billing', 'technical', 'account', 'general']:
-                if cat in response_lower:
-                    category = cat
-                    break
-            
-            # Extract priority
-            priority = 'medium'
-            for pri in ['critical', 'high', 'medium', 'low']:
-                if pri in response_lower:
-                    priority = pri
-                    break
+            logger.info(f"Successfully classified: category={category}, priority={priority}")
             
             return {
                 'suggested_category': category,
                 'suggested_priority': priority
             }
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM JSON response: {e}")
+            return self._get_default_classification()
+        except Exception as e:
+            logger.error(f"Anthropic API error: {str(e)}", exc_info=True)
+            return self._get_default_classification()
+    
+    def _get_default_classification(self) -> Dict[str, str]:
+        """
+        Return sensible defaults when LLM is unavailable.
+        """
+        return {
+            'suggested_category': 'general',
+            'suggested_priority': 'medium'
+        }
 
 
 # Singleton instance
-llm_classifier = LLMClassifier()
+_classifier_instance = None
+
+def get_classifier() -> LLMClassifier:
+    """Get or create the LLM classifier singleton."""
+    global _classifier_instance
+    if _classifier_instance is None:
+        _classifier_instance = LLMClassifier()
+    return _classifier_instance

@@ -1,7 +1,19 @@
 FROM node:18-alpine
+
+# Set working directory
 WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
-RUN npm install
+
+# Install dependencies
+RUN npm install --silent
+
+# Copy application files
 COPY . .
+
+# Expose port
 EXPOSE 3000
+
+# Start development server
 CMD ["npm", "start"]
