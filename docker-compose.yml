@@ -1,77 +1,69 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+
   db:
     image: postgres:15-alpine
-    container_name: ticketsystem_db
+    container_name: ticket_db
     environment:
       POSTGRES_DB: ticketdb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
-      - ticket_network
+      - ticket_net
 
-  # Django Backend
   backend:
-    build: ./backend
-    container_name: ticketsystem_backend
-    command: /app/entrypoint.sh
-    volumes:
-      - ./backend:/app
-      - static_volume:/app/staticfiles
-    ports:
-      - "8000:8000"
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ticket_backend
     environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - DJANGO_SECRET_KEY=change-me-in-production
       - DEBUG=True
-      - DJANGO_SECRET_KEY=dev-secret-key-change-in-production
       - DB_HOST=db
       - DB_PORT=5432
       - POSTGRES_DB=ticketdb
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      # LLM Configuration - REPLACE WITH YOUR API KEY
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_PROVIDER=anthropic
+    ports:
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
     networks:
-      - ticket_network
+      - ticket_net
 
-  # React Frontend
   frontend:
-    build: ./frontend
-    container_name: ticketsystem_frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "3000:3000"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ticket_frontend
     environment:
       - REACT_APP_API_URL=http://localhost:8000/api
       - CHOKIDAR_USEPOLLING=true
       - WDS_SOCKET_PORT=0
+    ports:
+      - "3000:3000"
     depends_on:
       - backend
-    networks:
-      - ticket_network
     stdin_open: true
     tty: true
+    networks:
+      - ticket_net
 
 volumes:
   postgres_data:
-  static_volume:
 
 networks:
-  ticket_network:
+  ticket_net:
     driver: bridge

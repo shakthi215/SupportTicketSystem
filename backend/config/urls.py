@@ -1,6 +1,3 @@
-"""
-URL configuration for Support Ticket System.
-"""
 from django.contrib import admin
 from django.urls import path, include
 
