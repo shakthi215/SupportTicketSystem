@@ -14,9 +14,9 @@ const TicketList = ({ tickets, onUpdateTicket, loading }) => {
     });
   };
 
-  const truncateText = (text, maxLength = 150) => {
+  const truncateText = (text, maxLength = 170) => {
     if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
+    return `${text.substring(0, maxLength)}...`;
   };
 
   const handleStatusChange = async (ticketId, newStatus) => {
@@ -35,7 +35,7 @@ const TicketList = ({ tickets, onUpdateTicket, loading }) => {
     return (
       <div className="loading">
         <div className="loading-spinner"></div>
-        <p style={{ marginTop: '20px' }}>Loading tickets...</p>
+        <p>Loading tickets...</p>
       </div>
     );
   }
@@ -43,9 +43,9 @@ const TicketList = ({ tickets, onUpdateTicket, loading }) => {
   if (tickets.length === 0) {
     return (
       <div className="empty-state">
-        <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📭</div>
+        <div className="empty-icon">0</div>
         <h3>No tickets found</h3>
-        <p>Try adjusting your filters or create a new ticket</p>
+        <p>Try adjusting your filters or create a new ticket.</p>
       </div>
     );
   }
@@ -54,17 +54,15 @@ const TicketList = ({ tickets, onUpdateTicket, loading }) => {
     <div className="ticket-list">
       {tickets.map((ticket) => {
         const isExpanded = expandedTicket === ticket.id;
-        
+
         return (
-          <div 
-            key={ticket.id} 
+          <div
+            key={ticket.id}
             className="ticket-item"
             onClick={() => toggleExpand(ticket.id)}
           >
             <div className="ticket-header">
-              <h3 className="ticket-title">
-                #{ticket.id} - {ticket.title}
-              </h3>
+              <h3 className="ticket-title">#{ticket.id} {ticket.title}</h3>
               <div className="ticket-badges">
                 <span className={`badge badge-category-${ticket.category}`}>
                   {ticket.category}
@@ -90,12 +88,9 @@ const TicketList = ({ tickets, onUpdateTicket, loading }) => {
             </div>
 
             {isExpanded && (
-              <div 
-                className="ticket-actions"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div className="ticket-actions" onClick={(e) => e.stopPropagation()}>
                 <label>
-                  <strong>Update Status:</strong>
+                  <strong>Update status</strong>
                   <select
                     value={ticket.status}
                     onChange={(e) => handleStatusChange(ticket.id, e.target.value)}

@@ -1,5 +1,5 @@
 from django.db import models
-from django.core.validators import MaxLengthValidator
+from django.db.models import Q
 
 
 class Ticket(models.Model):
@@ -103,9 +103,46 @@ class Ticket(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['-created_at']),
-            models.Index(fields=['category', 'status']),
-            models.Index(fields=['priority', 'status']),
+            models.Index(fields=['-created_at'], name='tix_created_idx'),
+            models.Index(fields=['category', 'status'], name='tix_cat_status_idx'),
+            models.Index(fields=['priority', 'status'], name='tix_pri_status_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=Q(title__gt=''),
+                name='ticket_title_not_empty',
+            ),
+            models.CheckConstraint(
+                check=Q(description__gt=''),
+                name='ticket_description_not_empty',
+            ),
+            models.CheckConstraint(
+                check=Q(category__in=[
+                    'billing',
+                    'technical',
+                    'account',
+                    'general',
+                ]),
+                name='ticket_valid_category',
+            ),
+            models.CheckConstraint(
+                check=Q(priority__in=[
+                    'low',
+                    'medium',
+                    'high',
+                    'critical',
+                ]),
+                name='ticket_valid_priority',
+            ),
+            models.CheckConstraint(
+                check=Q(status__in=[
+                    'open',
+                    'in_progress',
+                    'resolved',
+                    'closed',
+                ]),
+                name='ticket_valid_status',
+            ),
         ]
         db_table = 'tickets'
         verbose_name = 'Support Ticket'

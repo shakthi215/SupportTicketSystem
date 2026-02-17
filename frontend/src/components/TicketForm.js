@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ticketAPI } from '../services/api';
 
-const TicketForm = ({ onTicketCreated }) => {
+const TicketForm = ({ onCreateTicket, onTicketCreated }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: 'general',
     priority: 'medium',
   });
-  
+
   const [isClassifying, setIsClassifying] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -16,32 +16,12 @@ const TicketForm = ({ onTicketCreated }) => {
   const [classificationTimer, setClassificationTimer] = useState(null);
 
   useEffect(() => {
-    // Cleanup timer on unmount
     return () => {
       if (classificationTimer) {
         clearTimeout(classificationTimer);
       }
     };
   }, [classificationTimer]);
-
-  const handleDescriptionChange = (e) => {
-    const description = e.target.value;
-    setFormData(prev => ({ ...prev, description }));
-
-    // Clear previous timer
-    if (classificationTimer) {
-      clearTimeout(classificationTimer);
-    }
-
-    // Only classify if description is substantial
-    if (description.trim().length >= 20) {
-      const timer = setTimeout(() => {
-        classifyDescription(description);
-      }, 1000); // Debounce for 1 second
-      
-      setClassificationTimer(timer);
-    }
-  };
 
   const classifyDescription = async (description) => {
     if (!description || description.trim().length < 20) return;
@@ -51,17 +31,31 @@ const TicketForm = ({ onTicketCreated }) => {
 
     try {
       const result = await ticketAPI.classifyTicket(description);
-      
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         category: result.suggested_category || 'general',
         priority: result.suggested_priority || 'medium',
       }));
     } catch (err) {
-      console.error('Classification failed:', err);
-      // Fail silently - not critical to ticket submission
+      // Classification is best-effort only.
     } finally {
       setIsClassifying(false);
+    }
+  };
+
+  const handleDescriptionChange = (e) => {
+    const description = e.target.value;
+    setFormData((prev) => ({ ...prev, description }));
+
+    if (classificationTimer) {
+      clearTimeout(classificationTimer);
+    }
+
+    if (description.trim().length >= 20) {
+      const timer = setTimeout(() => {
+        classifyDescription(description);
+      }, 1000);
+      setClassificationTimer(timer);
     }
   };
 
@@ -72,7 +66,6 @@ const TicketForm = ({ onTicketCreated }) => {
     setIsSubmitting(true);
 
     try {
-      // Validate
       if (!formData.title.trim()) {
         throw new Error('Title is required');
       }
@@ -83,10 +76,9 @@ const TicketForm = ({ onTicketCreated }) => {
         throw new Error('Title cannot exceed 200 characters');
       }
 
-      // Create ticket
-      const newTicket = await ticketAPI.createTicket(formData);
-      
-      // Success!
+      const createFn = onCreateTicket || ticketAPI.createTicket;
+      const newTicket = await createFn(formData);
+
       setSuccess(true);
       setFormData({
         title: '',
@@ -95,16 +87,17 @@ const TicketForm = ({ onTicketCreated }) => {
         priority: 'medium',
       });
 
-      // Notify parent
       if (onTicketCreated) {
         onTicketCreated(newTicket);
       }
 
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(false), 3000);
-
     } catch (err) {
-      setError(err.message || 'Failed to create ticket');
+      const detail =
+        err.response?.data?.detail ||
+        (typeof err.response?.data === 'string' ? err.response.data : null) ||
+        err.message;
+      setError(detail || 'Failed to create ticket');
     } finally {
       setIsSubmitting(false);
     }
@@ -112,30 +105,19 @@ const TicketForm = ({ onTicketCreated }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   return (
-    <div className="card">
-      <h2 className="card-title">🎫 Submit a New Ticket</h2>
+    <div className="card form-card">
+      <h2 className="card-title">Create New Ticket</h2>
 
-      {error && (
-        <div className="error-message">
-          ⚠️ {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="success-message">
-          ✅ Ticket created successfully!
-        </div>
-      )}
+      {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">Ticket created successfully.</div>}
 
       <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label htmlFor="title">
-            Title <span style={{ color: 'red' }}>*</span>
-          </label>
+          <label htmlFor="title">Title *</label>
           <input
             type="text"
             id="title"
@@ -146,36 +128,30 @@ const TicketForm = ({ onTicketCreated }) => {
             maxLength="200"
             required
           />
-          <small style={{ color: '#999', fontSize: '0.85rem' }}>
-            {formData.title.length}/200 characters
-          </small>
+          <small className="hint">{formData.title.length}/200 characters</small>
         </div>
 
         <div className="form-group">
-          <label htmlFor="description">
-            Description <span style={{ color: 'red' }}>*</span>
-          </label>
+          <label htmlFor="description">Description *</label>
           <textarea
             id="description"
             name="description"
             value={formData.description}
             onChange={handleDescriptionChange}
-            placeholder="Describe your issue in detail..."
+            placeholder="Describe your issue in detail"
             required
           />
           {isClassifying && (
             <div className="classifying-indicator">
               <span className="classifying-spinner"></span>
-              AI is analyzing your description...
+              AI is analyzing your description
             </div>
           )}
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label htmlFor="category">
-              Category {isClassifying && '✨'}
-            </label>
+            <label htmlFor="category">Category</label>
             <select
               id="category"
               name="category"
@@ -187,15 +163,11 @@ const TicketForm = ({ onTicketCreated }) => {
               <option value="account">Account</option>
               <option value="general">General</option>
             </select>
-            <small style={{ color: '#999', fontSize: '0.85rem' }}>
-              AI-suggested, you can override
-            </small>
+            <small className="hint">AI-suggested, editable</small>
           </div>
 
           <div className="form-group">
-            <label htmlFor="priority">
-              Priority {isClassifying && '✨'}
-            </label>
+            <label htmlFor="priority">Priority</label>
             <select
               id="priority"
               name="priority"
@@ -207,18 +179,16 @@ const TicketForm = ({ onTicketCreated }) => {
               <option value="high">High</option>
               <option value="critical">Critical</option>
             </select>
-            <small style={{ color: '#999', fontSize: '0.85rem' }}>
-              AI-suggested, you can override
-            </small>
+            <small className="hint">AI-suggested, editable</small>
           </div>
         </div>
 
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           className="btn btn-primary btn-full"
-          disabled={isSubmitting || isClassifying}
+          disabled={isSubmitting}
         >
-          {isSubmitting ? 'Creating Ticket...' : 'Submit Ticket'}
+          {isSubmitting ? 'Submitting...' : 'Submit Ticket'}
         </button>
       </form>
     </div>

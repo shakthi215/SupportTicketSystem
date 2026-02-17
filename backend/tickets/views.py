@@ -10,10 +10,8 @@ Implements all required endpoints:
 """
 
 import logging
-from datetime import datetime, timedelta
-from django.db.models import Count, Q, Avg
+from django.db.models import Avg, Count, Q
 from django.db.models.functions import TruncDate
-from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -143,41 +141,32 @@ class TicketViewSet(viewsets.ModelViewSet):
         # Open tickets count
         open_tickets = Ticket.objects.filter(status=Ticket.STATUS_OPEN).count()
         
-        # Priority breakdown - DB-level aggregation
-        priority_breakdown = {}
-        priority_counts = Ticket.objects.values('priority').annotate(
+        # Priority breakdown - DB-level conditional aggregation
+        priority_breakdown = Ticket.objects.aggregate(
+            low=Count('id', filter=Q(priority=Ticket.PRIORITY_LOW)),
+            medium=Count('id', filter=Q(priority=Ticket.PRIORITY_MEDIUM)),
+            high=Count('id', filter=Q(priority=Ticket.PRIORITY_HIGH)),
+            critical=Count('id', filter=Q(priority=Ticket.PRIORITY_CRITICAL)),
+        )
+
+        # Category breakdown - DB-level conditional aggregation
+        category_breakdown = Ticket.objects.aggregate(
+            billing=Count('id', filter=Q(category=Ticket.CATEGORY_BILLING)),
+            technical=Count('id', filter=Q(category=Ticket.CATEGORY_TECHNICAL)),
+            account=Count('id', filter=Q(category=Ticket.CATEGORY_ACCOUNT)),
+            general=Count('id', filter=Q(category=Ticket.CATEGORY_GENERAL)),
+        )
+
+        # Average tickets per day - DB-level group-by + aggregate
+        daily_counts = Ticket.objects.annotate(
+            day=TruncDate('created_at')
+        ).values('day').annotate(
             count=Count('id')
         )
-        for item in priority_counts:
-            priority_breakdown[item['priority']] = item['count']
-        
-        # Ensure all priorities are present (even with 0 count)
-        for priority_choice, _ in Ticket.PRIORITY_CHOICES:
-            if priority_choice not in priority_breakdown:
-                priority_breakdown[priority_choice] = 0
-        
-        # Category breakdown - DB-level aggregation
-        category_breakdown = {}
-        category_counts = Ticket.objects.values('category').annotate(
-            count=Count('id')
+        avg_tickets_per_day = round(
+            (daily_counts.aggregate(avg=Avg('count'))['avg'] or 0.0),
+            1,
         )
-        for item in category_counts:
-            category_breakdown[item['category']] = item['count']
-        
-        # Ensure all categories are present (even with 0 count)
-        for category_choice, _ in Ticket.CATEGORY_CHOICES:
-            if category_choice not in category_breakdown:
-                category_breakdown[category_choice] = 0
-        
-        # Average tickets per day - DB-level calculation
-        if total_tickets > 0:
-            earliest_ticket = Ticket.objects.earliest('created_at')
-            latest_ticket = Ticket.objects.latest('created_at')
-            
-            days_diff = (latest_ticket.created_at - earliest_ticket.created_at).days + 1
-            avg_tickets_per_day = round(total_tickets / days_diff, 1)
-        else:
-            avg_tickets_per_day = 0.0
         
         stats = {
             'total_tickets': total_tickets,

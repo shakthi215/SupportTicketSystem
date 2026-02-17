@@ -16,7 +16,6 @@ export const useTickets = (initialFilters = {}) => {
       setTickets(data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch tickets');
-      console.error('Error fetching tickets:', err);
     } finally {
       setLoading(false);
     }
@@ -75,7 +74,6 @@ export const useStats = (refreshTrigger = 0) => {
         setStats(data);
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to fetch statistics');
-        console.error('Error fetching stats:', err);
       } finally {
         setLoading(false);
       }

@@ -76,6 +76,7 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
 }
 
-# LLM API key — set via docker-compose environment variable
+# LLM configuration (set via environment variables)
 LLM_API_KEY = os.environ.get('LLM_API_KEY', '')
-LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'anthropic')
+LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'openai')
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')

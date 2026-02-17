@@ -11,24 +11,10 @@ const api = axios.create({
   timeout: 30000,
 });
 
-// Request interceptor for logging
-api.interceptors.request.use(
-  (config) => {
-    console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor for error handling
+// Response interceptor for uniform error propagation
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    console.error('API Error:', error.response?.data || error.message);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Ticket API functions

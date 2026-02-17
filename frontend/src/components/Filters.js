@@ -18,45 +18,32 @@ const Filters = ({ filters, onFilterChange }) => {
     });
   };
 
-  const hasActiveFilters = 
-    filters.category || 
-    filters.priority || 
-    filters.status || 
-    filters.search;
+  const hasActiveFilters =
+    filters.category || filters.priority || filters.status || filters.search;
 
   return (
-    <div className="card" style={{ marginBottom: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-        <h3 style={{ margin: 0 }}>🔍 Filters</h3>
+    <div className="card filter-card">
+      <div className="section-head">
+        <h3>Filters</h3>
         {hasActiveFilters && (
-          <button 
-            onClick={clearFilters}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#667eea',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              textDecoration: 'underline',
-            }}
-          >
-            Clear All
+          <button className="clear-filters" onClick={clearFilters}>
+            Clear all
           </button>
         )}
       </div>
 
       <div className="filters">
-        <div className="form-group search-box" style={{ margin: 0 }}>
+        <div className="form-group search-box compact">
           <input
             type="text"
             name="search"
-            placeholder="Search title or description..."
+            placeholder="Search title or description"
             value={filters.search || ''}
             onChange={handleChange}
           />
         </div>
 
-        <div className="form-group" style={{ margin: 0 }}>
+        <div className="form-group compact">
           <select
             name="category"
             value={filters.category || ''}
@@ -70,7 +57,7 @@ const Filters = ({ filters, onFilterChange }) => {
           </select>
         </div>
 
-        <div className="form-group" style={{ margin: 0 }}>
+        <div className="form-group compact">
           <select
             name="priority"
             value={filters.priority || ''}
@@ -84,7 +71,7 @@ const Filters = ({ filters, onFilterChange }) => {
           </select>
         </div>
 
-        <div className="form-group" style={{ margin: 0 }}>
+        <div className="form-group compact">
           <select
             name="status"
             value={filters.status || ''}

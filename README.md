@@ -1,199 +1,95 @@
-# Support Ticket System - AI-Powered Tech Support Platform
+# Support Ticket System
 
-A full-stack support ticket management system with intelligent LLM-powered classification built using Django, React, and Anthropic's Claude AI.
+AI-powered support ticket management built for the Tech Intern Assessment.
 
-## 🌟 Features
+## Features
 
-### Core Functionality
-- **Smart Ticket Creation**: Submit tickets with automatic AI-powered categorization and prioritization
-- **Real-time Classification**: Claude AI analyzes ticket descriptions and suggests appropriate category and priority
-- **Advanced Filtering**: Filter tickets by category, priority, status, and search across title/description
-- **Status Management**: Update ticket status through intuitive UI (Open → In Progress → Resolved → Closed)
-- **Comprehensive Statistics**: Real-time dashboard showing ticket metrics, breakdowns, and trends
+- Create tickets with required validation (`title`, `description`, `category`, `priority`)
+- LLM-assisted classification (`/api/tickets/classify/`) using OpenAI
+- Editable AI suggestions before submit (category + priority override)
+- Ticket list with combined filters (`category`, `priority`, `status`, `search`)
+- Status update flow via `PATCH /api/tickets/<id>/`
+- Live stats dashboard with DB-level aggregation:
+  - `total_tickets`
+  - `open_tickets`
+  - `avg_tickets_per_day`
+  - `priority_breakdown`
+  - `category_breakdown`
+- Fully containerized stack (PostgreSQL + Django + React)
 
-### Technical Highlights
-- **LLM Integration**: Anthropic Claude Sonnet 4 for intelligent ticket classification
-- **Database-Level Aggregation**: Efficient statistics using Django ORM (not Python loops)
-- **RESTful API**: Clean, well-documented API endpoints with proper status codes
-- **Containerized Deployment**: Complete Docker setup with automatic migrations
-- **Modern React UI**: Responsive, intuitive interface with real-time updates
+## Tech Stack
 
-## 🚀 Quick Start
+- Backend: Django, Django REST Framework, PostgreSQL
+- Frontend: React
+- LLM: OpenAI API
+- Infra: Docker Compose
 
-### Prerequisites
-- Docker & Docker Compose installed
-- Anthropic API key (optional but recommended for full functionality)
+## OpenAI Integration
 
-### Installation
+- API key is loaded from environment variable `LLM_API_KEY`
+- Provider is configurable with `LLM_PROVIDER` (default: `openai`)
+- Model is configurable with `OPENAI_MODEL` (default: `gpt-4o-mini`)
+- Prompt used for classification is in:
+  - `backend/tickets/llm_service.py`
+- Graceful fallback behavior:
+  - If LLM fails/unavailable/invalid JSON, defaults are returned:
+    - `suggested_category: general`
+    - `suggested_priority: medium`
 
-1. **Navigate to project directory**
-```bash
-cd support-ticket-system
-```
+## Project Structure
 
-2. **Set your API key** (Optional but recommended)
-
-Create a `.env` file in the root directory:
-```bash
-echo "LLM_API_KEY=your_anthropic_api_key_here" > .env
-```
-
-Or export it:
-```bash
-export LLM_API_KEY=your_anthropic_api_key_here
-```
-
-3. **Build and run the application**
-```bash
-docker-compose up --build
-```
-
-That's it! The application will:
-- Build all containers
-- Create and migrate the database
-- Start all services automatically
-
-### Access the Application
-
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000/api
-- **Admin Panel**: http://localhost:8000/admin (admin/admin123)
-
-## 🤖 LLM Integration - Why Anthropic Claude?
-
-I chose **Anthropic Claude Sonnet 4** for several key reasons:
-
-1. **Superior Reasoning**: Excellent at understanding context and nuance in support requests
-2. **Reliability**: Consistent structured output for classification tasks
-3. **Safety**: Built-in safety features reduce risk of inappropriate suggestions
-4. **Speed**: Fast response times crucial for real-time UI updates
-5. **Cost-Effective**: Efficient token usage for classification tasks
-
-### Prompt Design Philosophy
-
-The classification prompt is carefully engineered to:
-- Provide clear category and priority definitions with examples
-- Request structured JSON output for easy parsing
-- Include few-shot learning examples
-- Handle edge cases gracefully
-
-### Graceful Degradation
-
-The system handles LLM failures gracefully:
-- Falls back to sensible defaults (category: general, priority: medium)
-- Ticket submission always succeeds even if classification fails
-- Users can always override AI suggestions
-- Errors are logged but don't impact user experience
-
-## 📚 API Endpoints
-
-### Tickets
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/tickets/` | Create a new ticket |
-| GET | `/api/tickets/` | List all tickets (with filters) |
-| PATCH | `/api/tickets/<id>/` | Update a ticket |
-| GET | `/api/tickets/stats/` | Get aggregated statistics |
-| POST | `/api/tickets/classify/` | Classify ticket description |
-
-### Example Usage
-
-```bash
-# Create a ticket
-curl -X POST http://localhost:8000/api/tickets/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Cannot access dashboard",
-    "description": "Getting 404 error when clicking dashboard link",
-    "category": "technical",
-    "priority": "medium"
-  }'
-
-# Classify description
-curl -X POST http://localhost:8000/api/tickets/classify/ \
-  -H "Content-Type: application/json" \
-  -d '{"description": "Need help resetting my password"}'
-```
-
-## 🏗️ Technical Architecture
-
-### Backend (Django + DRF)
-- Django 5.0.1 with Django REST Framework
-- PostgreSQL 15 with optimized indexes
-- Anthropic Claude API for classification
-- Gunicorn WSGI server
-
-### Frontend (React)
-- React 18 with Hooks
-- Custom hooks for data fetching
-- Axios API client
-- Modern CSS with gradients
-
-### Infrastructure
-- Docker + Docker Compose
-- PostgreSQL with persistent volumes
-- Automatic migrations on startup
-
-## 🎯 Key Design Decisions
-
-1. **Debounced Classification**: Reduce API calls while maintaining responsiveness
-2. **Database Indexes**: Optimize common query patterns
-3. **Component Separation**: Clear separation of concerns in React
-4. **Graceful Degradation**: System works without LLM
-5. **Real-time Updates**: No page reloads required
-
-## 🧪 Testing the Application
-
-1. **Create a ticket**: "My credit card was charged twice this month"
-   - Expected: category=billing, priority=high
-
-2. **Create a ticket**: "The website keeps showing 500 errors"
-   - Expected: category=technical, priority=high
-
-3. **Use filters** to find tickets by category/priority/status
-
-4. **Update status** to see real-time stats update
-
-## 🛠️ Troubleshooting
-
-### LLM Not Working
-- Check API key: `docker-compose exec backend env | grep LLM_API_KEY`
-- Ticket creation still works without LLM (uses defaults)
-
-### Port Already in Use
-Modify ports in `docker-compose.yml` if 3000 or 8000 are in use
-
-### View Logs
-```bash
-docker-compose logs -f backend
-docker-compose logs -f frontend
-```
-
-## 📦 Project Structure
-
-```
+```text
 support-ticket-system/
-├── backend/           # Django backend
-│   ├── config/        # Settings
-│   ├── tickets/       # Main app
-│   └── Dockerfile
-├── frontend/          # React frontend
-│   ├── src/
-│   └── Dockerfile
-├── docker-compose.yml
-└── README.md
+  backend/
+    config/
+    tickets/
+  frontend/
+    src/
+  docker-compose.yml
+  .env.example
 ```
 
-## 🚀 Production Considerations
+## Setup
 
-For production:
-1. Change `DJANGO_SECRET_KEY` and set `DEBUG=False`
-2. Add HTTPS/SSL certificates
-3. Configure Redis for caching
-4. Set up monitoring (Sentry, etc.)
-5. Add rate limiting for LLM API
+1. Create `.env` in project root:
 
----
+```env
+LLM_API_KEY=your-openai-api-key
+LLM_PROVIDER=openai
+OPENAI_MODEL=gpt-4o-mini
+```
 
-**Built with ❤️ using Django, React, PostgreSQL, and Anthropic Claude**
+2. Build and run:
+
+```bash
+docker compose up --build
+```
+
+3. Open:
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000/api/`
+- Django Admin: `http://localhost:8000/admin/`
+
+Admin credentials (auto-created on backend startup):
+- Username: `admin`
+- Password: `admin123`
+
+## API Endpoints
+
+- `POST /api/tickets/` Create ticket
+- `GET /api/tickets/` List tickets (newest first) with optional query params:
+  - `category`
+  - `priority`
+  - `status`
+  - `search`
+- `PATCH /api/tickets/<id>/` Update status/category/priority
+- `GET /api/tickets/stats/` Aggregated dashboard metrics
+- `POST /api/tickets/classify/` LLM suggestion endpoint
+
+## Notes for Evaluation
+
+- Ticket constraints are enforced at model/database layer (choices + check constraints)
+- Stats endpoint uses ORM aggregation (not Python loops)
+- Classify endpoint is resilient to provider/network/JSON failures
+- Frontend updates list and stats without full page reload after submit/update

@@ -11,9 +11,9 @@ router = DefaultRouter()
 router.register(r'tickets', TicketViewSet, basename='ticket')
 
 urlpatterns = [
-    # ViewSet routes: /api/tickets/, /api/tickets/<id>/, /api/tickets/stats/
-    path('', include(router.urls)),
-    
     # Custom classification endpoint
     path('tickets/classify/', ClassifyTicketView.as_view(), name='classify-ticket'),
+
+    # ViewSet routes: /api/tickets/, /api/tickets/<id>/, /api/tickets/stats/
+    path('', include(router.urls)),
 ]

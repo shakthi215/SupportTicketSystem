@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /home/claude/support-ticket-system/frontend
+cd /home/user/support-ticket-system/frontend
 
 # Create Dockerfile
 cat > Dockerfile << 'EOF'

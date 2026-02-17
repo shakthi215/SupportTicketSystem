@@ -1,12 +1,14 @@
 """
 LLM Service for intelligent ticket classification and prioritization.
 
-This module handles integration with LLM APIs (Anthropic Claude) to automatically
+This module handles integration with LLM APIs (OpenAI) to automatically
 suggest categories and priorities for support tickets based on their descriptions.
 """
 
 import logging
-from typing import Dict, Optional
+import json
+from urllib import request, error
+from typing import Dict
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class LLMClassifier:
     """
-    Intelligent ticket classifier using Claude API.
+    Intelligent ticket classifier using OpenAI API.
     
     The classifier analyzes ticket descriptions to suggest:
     - Category: billing, technical, account, or general
@@ -60,6 +62,7 @@ Now classify this ticket:
     def __init__(self):
         self.api_key = settings.LLM_API_KEY
         self.provider = settings.LLM_PROVIDER
+        self.model = settings.OPENAI_MODEL
         self.is_configured = bool(self.api_key)
         
         if not self.is_configured:
@@ -85,8 +88,8 @@ Now classify this ticket:
             return self._get_default_classification()
         
         try:
-            if self.provider == 'anthropic':
-                return self._classify_with_anthropic(description)
+            if self.provider == 'openai':
+                return self._classify_with_openai(description)
             else:
                 logger.warning(f"Unknown LLM provider: {self.provider}")
                 return self._get_default_classification()
@@ -95,35 +98,39 @@ Now classify this ticket:
             logger.error(f"LLM classification failed: {str(e)}", exc_info=True)
             return self._get_default_classification()
     
-    def _classify_with_anthropic(self, description: str) -> Dict[str, str]:
+    def _classify_with_openai(self, description: str) -> Dict[str, str]:
         """
-        Use Anthropic Claude API for classification.
+        Use OpenAI Chat Completions API for classification.
         """
         try:
-            import anthropic
-        except ImportError:
-            logger.error("anthropic package not installed")
-            return self._get_default_classification()
-        
-        try:
-            client = anthropic.Anthropic(api_key=self.api_key)
-            
             prompt = self.CLASSIFICATION_PROMPT.format(description=description)
-            
-            message = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=200,
-                temperature=0.0,  # Deterministic for classification
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+
+            payload = json.dumps({
+                "model": self.model,
+                "temperature": 0,
+                "max_tokens": 200,
+                "messages": [
+                    {"role": "system", "content": "You are a strict JSON classifier."},
+                    {"role": "user", "content": prompt},
+                ],
+                "response_format": {"type": "json_object"},
+            }).encode("utf-8")
+
+            req = request.Request(
+                url="https://api.openai.com/v1/chat/completions",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                method="POST",
             )
-            
-            response_text = message.content[0].text.strip()
+            with request.urlopen(req, timeout=20) as resp:
+                response_data = json.loads(resp.read().decode("utf-8"))
+
+            response_text = response_data["choices"][0]["message"]["content"].strip()
             logger.info(f"LLM raw response: {response_text}")
-            
-            # Parse JSON response
-            import json
+
             result = json.loads(response_text)
             
             # Validate and return
@@ -152,8 +159,15 @@ Now classify this ticket:
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM JSON response: {e}")
             return self._get_default_classification()
+        except error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="ignore")
+            logger.error(f"OpenAI HTTP error: {e.code} {body}")
+            return self._get_default_classification()
+        except error.URLError as e:
+            logger.error(f"OpenAI network error: {e}")
+            return self._get_default_classification()
         except Exception as e:
-            logger.error(f"Anthropic API error: {str(e)}", exc_info=True)
+            logger.error(f"OpenAI API error: {str(e)}", exc_info=True)
             return self._get_default_classification()
     
     def _get_default_classification(self) -> Dict[str, str]:
