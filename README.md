@@ -1,6 +1,7 @@
 # Support Ticket System
 
-AI-powered support ticket management built for the Tech Intern Assessment.
+AI-powered support ticket management.
+![App Screenshot](outputimages/Screenshot%202026-02-17%20123558.png)
 
 ## Features
 
